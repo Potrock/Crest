@@ -5709,6 +5709,10 @@
     "pinned-saved-close-choices": {
       "category": "improved",
       "message": "Settings › Tabs now lets you choose separately what pinned tabs and saved tabs do after you close them, so saved tabs can go back to their saved URL while pinned tabs resume where you left off. Your current choice carries over to both."
+    },
+    "agent-tabs-in-rex": {
+      "category": "new",
+      "message": "Coding agents running in a Rex terminal can give each Crest tab they use its own Rex tab, showing the page and what the agent does there, with Rex marking the tab while the agent works and when Crest is asking you something."
     }
   }
 }

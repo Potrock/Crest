@@ -49,6 +49,19 @@ When the program is a general interpreter, such as node or python, allowing it c
 
 Any program that runs as you on your Mac can run an agent you allowed. Crest's question tells agents apart so you can see and control them; it is not a defense against harmful software already on your Mac. Allow only agents you trust, and turn agents off when you don't need them.
 
+## Follow agents in Rex
+
+When an agent runs in a [Rex](https://www.superlogical.com/rex/) terminal, each Crest tab it uses can get its own Rex tab in the agent's session. Add `--rex` to the helper in your agent's MCP settings:
+
+```text
+/Applications/Crest.app/Contents/Helpers/crest-browser mcp --rex
+```
+
+- A Rex tab opens in the background the first time the agent uses a Crest tab, named after the page. It shows the page's title and address and each call the agent makes there, with how long it took and why it failed. Text the agent fills or types, and the scripts it runs, show only by length.
+- Rex shows the tab as working while the agent acts, and as waiting on you while Crest asks you something before the agent can go on.
+- Press `o` to see the tab in Crest, or `q` to close the Rex tab. Closing a Rex tab leaves the Crest tab as it is, and that tab doesn't get a Rex tab again until the agent reconnects.
+- When the agent closes the Crest tab, its Rex tab closes too. When the agent disconnects, its Rex tabs stay open until you close them.
+
 ## For agent authors
 
 Crest includes a Model Context Protocol server as a helper inside the app, which an agent runs over its standard input and output:

@@ -45,6 +45,9 @@ actor AgentHelperEndpoint {
 
     private let output: AgentLineChannel
     private let link: AgentAppLink
+    /// The Rex tabs of the Crest tabs the agent uses, when it runs in Rex and
+    /// the person asked for them.
+    private let rexTabs: AgentRexTabs?
     private let serverInfo: AgentJSON
     /// The legacy revision `initialize` agreed on, which holds for the
     /// helper's life; nil for a modern client.
@@ -59,9 +62,10 @@ actor AgentHelperEndpoint {
 
     // MARK: - Initializers
 
-    init(output: AgentLineChannel, link: AgentAppLink, version: String) {
+    init(output: AgentLineChannel, link: AgentAppLink, rexTabs: AgentRexTabs?, version: String) {
         self.output = output
         self.link = link
+        self.rexTabs = rexTabs
         serverInfo = .object(["name": .string("crest-browser"), "title": .string("Crest"), "version": .string(version)])
     }
 
@@ -131,7 +135,9 @@ actor AgentHelperEndpoint {
         let arguments = params["arguments"] ?? .object([:])
         let client = client
         let key = Self.key(id)
+        let rexTabs = rexTabs
         calls[key] = Task {
+            let rexCall = await rexTabs?.began(name, arguments: arguments, client: client)
             let result: AgentToolResult
             do {
                 result = try await link.call(name, arguments: arguments, client: client)
@@ -140,6 +146,7 @@ actor AgentHelperEndpoint {
             } catch {
                 result = .error("Crest could not run the tool.")
             }
+            if let rexCall { await rexTabs?.ended(rexCall, result: result) }
             guard !Task.isCancelled else { return }
             await finish(key, result: result, id: id, modern: modern)
         }
