@@ -6,13 +6,29 @@ set -euo pipefail
 # The Chromium engine is the published one matching this checkout's engine
 # inputs; set CREST_CHROMIUM_APP to a locally built Chromium.app to use that
 # instead.
+#
+# A fork signed by another team sets its identity in Config/LocalRelease.env,
+# which this script reads when it exists:
+#
+#   CREST_LOCAL_TEAM_ID             the team whose Developer ID signs the app
+#   CREST_LOCAL_BUNDLE_IDENTIFIER   the app's bundle ID; its CloudKit container
+#                                   and keychain group follow from it
+#   CREST_LOCAL_PROVISIONING_PROFILE  the Developer ID profile for that ID
+#   CREST_LOCAL_SOFTWARE_UPDATES    "off" leaves out Crest's update feed, so
+#                                   published builds never replace the app
+#   CREST_LOCAL_PASSKEYS            "off" leaves out the browser passkey
+#                                   entitlement, which Apple grants on request
 
 repository_root="${0:A:h:h}"
+[[ -f "$repository_root/Config/LocalRelease.env" ]] && source "$repository_root/Config/LocalRelease.env"
 application_path="/Applications/Crest.app"
 repository="pauljoda/Crest"
-team_id="3U2R97HLXF"
+team_id="${CREST_LOCAL_TEAM_ID:-3U2R97HLXF}"
+bundle_identifier="${CREST_LOCAL_BUNDLE_IDENTIFIER:-com.pauldavis.crest}"
 signing_identity="Developer ID Application"
-provisioning_profile="Crest Developer ID"
+provisioning_profile="${CREST_LOCAL_PROVISIONING_PROFILE:-Crest Developer ID}"
+software_updates="${CREST_LOCAL_SOFTWARE_UPDATES:-on}"
+passkeys="${CREST_LOCAL_PASSKEYS:-on}"
 development_appcast_url="https://raw.githubusercontent.com/pauljoda/Crest/updates/appcast-development.xml"
 derived_data_path="${CREST_LOCAL_RELEASE_DERIVED_DATA:-$HOME/Library/Developer/Xcode/DerivedData/Crest-LocalRelease}"
 engine_cache_root="${CREST_ENGINE_CACHE:-$HOME/Library/Caches/Crest-local-release}"
@@ -25,7 +41,7 @@ signing_identity_hash="$(
     | awk "/${signing_identity}: .*\\(${team_id}\\)/ { print \$2; exit }"
 )"
 if [[ -z "$signing_identity_hash" ]]; then
-  print -u2 "Crest's Developer ID Application identity is not installed."
+  print -u2 "The Developer ID Application identity of team $team_id is not installed."
   exit 1
 fi
 
@@ -163,6 +179,38 @@ fi
 
 print "Building Crest Release ($build_number) with production services and $engine_label..."
 
+# --- Identity: Crest's own files name its bundle ID, container and team; a
+# fork gets copies naming its own. ---
+entitlements_path="$repository_root/CrestMac/Configuration/Crest.entitlements"
+export_options_path="$repository_root/Config/DeveloperIDExportOptions.plist"
+typeset -a package_identity
+if [[ "$bundle_identifier" != "com.pauldavis.crest" || "$team_id" != "3U2R97HLXF" \
+  || "$software_updates" == "off" || "$passkeys" == "off" ]]; then
+  entitlements_path="$release_root/Crest.entitlements"
+  export_options_path="$release_root/DeveloperIDExportOptions.plist"
+  python3 - "$repository_root" "$release_root" "$bundle_identifier" "$team_id" "$provisioning_profile" "$passkeys" <<'PYTHON'
+import plistlib, sys
+from pathlib import Path
+repo, out, bundle, team, profile, passkeys = sys.argv[1:]
+with open(Path(repo, "CrestMac/Configuration/Crest.entitlements"), "rb") as stream:
+    entitlements = plistlib.load(stream)
+entitlements["com.apple.developer.icloud-container-identifiers"] = ["iCloud." + bundle]
+entitlements["keychain-access-groups"] = ["$(AppIdentifierPrefix)" + bundle]
+if passkeys == "off":
+    entitlements.pop("com.apple.developer.web-browser.public-key-credential", None)
+with open(Path(out, "Crest.entitlements"), "wb") as stream:
+    plistlib.dump(entitlements, stream)
+with open(Path(repo, "Config/DeveloperIDExportOptions.plist"), "rb") as stream:
+    options = plistlib.load(stream)
+options["teamID"] = team
+options["provisioningProfiles"] = {bundle: profile}
+with open(Path(out, "DeveloperIDExportOptions.plist"), "wb") as stream:
+    plistlib.dump(options, stream)
+PYTHON
+  package_identity=(--bundle-identifier "$bundle_identifier" --cloudkit-container "iCloud.$bundle_identifier")
+  [[ "$software_updates" == "off" ]] && package_identity+=(--without-updates)
+fi
+
 # --- Entitlements: Xcode's Developer ID export of the WebKit composition
 # resolves the entitlements Crest is signed with, as in the release. ---
 xcodebuild archive \
@@ -176,6 +224,8 @@ xcodebuild archive \
   CURRENT_PROJECT_VERSION="$build_number" \
   CREST_DEFAULT_UPDATE_CHANNEL=development \
   DEVELOPMENT_TEAM="$team_id" \
+  CREST_MAC_BUNDLE_IDENTIFIER="$bundle_identifier" \
+  CREST_MAC_ENTITLEMENTS="$entitlements_path" \
   CODE_SIGN_STYLE=Manual \
   CODE_SIGN_IDENTITY="$signing_identity" \
   CREST_PROVISIONING_PROFILE_SPECIFIER="$provisioning_profile"
@@ -184,7 +234,7 @@ xcodebuild -exportArchive \
   -quiet \
   -archivePath "$archive_path" \
   -exportPath "$export_path" \
-  -exportOptionsPlist Config/DeveloperIDExportOptions.plist
+  -exportOptionsPlist "$export_options_path"
 
 [[ -d "$export_path/Crest.app" ]]
 exported_entitlements="$release_root/exported-entitlements.plist"
@@ -234,11 +284,12 @@ CREST_DEFAULT_UPDATE_CHANNEL=development python3 Scripts/control-plane/package-c
   --entitlements "$exported_entitlements" \
   --provisioning-profile "$profile_path" \
   --signing-identity "$signing_identity_hash" \
+  "${package_identity[@]}" \
   --output "$built_application_path"
 
 codesign --verify --deep --strict --verbose=2 "$built_application_path"
 [[ "$(defaults read "$built_application_path/Contents/Info" CFBundleIdentifier)" \
-  == "com.pauldavis.crest" ]]
+  == "$bundle_identifier" ]]
 [[ "$(defaults read "$built_application_path/Contents/Info" CFBundleVersion)" == "$build_number" ]]
 
 # Match only the installed app's own main executable, whatever it is named:

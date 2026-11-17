@@ -5713,6 +5713,10 @@
     "agent-tabs-in-rex": {
       "category": "new",
       "message": "Coding agents running in a Rex terminal can give each Crest tab they use its own Rex tab, showing the page and what the agent does there, with Rex marking the tab while the agent works and when Crest is asking you something."
+    },
+    "local-release-fork-identity": {
+      "category": "internal",
+      "message": "The local release script can build and install a fork under its own team, bundle ID and CloudKit container, optionally without Crest's update feed."
     }
   }
 }

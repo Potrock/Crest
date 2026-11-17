@@ -214,6 +214,12 @@ def main():
     parser.add_argument("--product", action="store_true",
                         help="Package Crest's own desktop identity from CrestChromiumUIProduct: browser registration, "
                              "document types and the Sparkle update feed instead of the isolated review identity")
+    parser.add_argument("--bundle-identifier", default="com.pauldavis.crest",
+                        help="The product identity's bundle identifier, for a fork signed by another team")
+    parser.add_argument("--cloudkit-container",
+                        help="The product's CloudKit container, when it isn't the one Crest's Info.plist names")
+    parser.add_argument("--without-updates", action="store_true",
+                        help="Leave out the Sparkle update feed, so the product never replaces itself with a published build")
     parser.add_argument("--entitlements", type=Path,
                         help="Resolved entitlements plist for the product identity; build-setting variables must already be expanded")
     parser.add_argument("--ui", type=Path, help="Built CrestChromiumUI.framework or CrestChromiumUIProduct.framework")
@@ -257,8 +263,11 @@ def main():
             parser.error("Build CrestChromiumUIProduct for a product package; this framework is the isolated review composition")
         if not args.product and is_product_framework:
             parser.error("Build CrestChromiumUI for a review package; this framework is the normal product composition")
+    if (args.bundle_identifier != "com.pauldavis.crest" or args.cloudkit_container
+            or args.without_updates) and not args.product:
+        parser.error("A bundle identifier, container or update choice belongs to the product identity")
     identity = (
-        "com.pauldavis.crest" if args.product
+        args.bundle_identifier if args.product
         else "com.pauldavis.crest.chromium-baseline" if args.baseline
         else "com.pauldavis.crest.control-plane.chromium")
     product_entitlements = None
@@ -281,7 +290,7 @@ def main():
         team = granted.get("com.apple.developer.team-identifier", "")
         expected_id = team + "." + identity
         with (repo / "CrestMac/Configuration/Crest-Info.plist").open("rb") as stream:
-            container = plistlib.load(stream)["CrestCloudKitContainerIdentifier"]
+            container = args.cloudkit_container or plistlib.load(stream)["CrestCloudKitContainerIdentifier"]
         expiration = profile.get("ExpirationDate")
         # A product profile may carry either environment; an experiment profile
         # stays on development so it can never reach production records.
@@ -390,7 +399,8 @@ def main():
         info.pop("OSAScriptingDefinition", None)
         with (repo / "CrestMac/Configuration/Crest-Info.plist").open("rb") as stream:
             crest_info = plistlib.load(stream)
-        info["CrestCloudKitContainerIdentifier"] = crest_info["CrestCloudKitContainerIdentifier"]
+        info["CrestCloudKitContainerIdentifier"] = (
+            args.cloudkit_container or crest_info["CrestCloudKitContainerIdentifier"])
     if args.product:
         # Crest's own browser registration, document handling, update feed and
         # privacy prompt text. The keys stay owned by the app's Info.plist;
@@ -405,7 +415,11 @@ def main():
         # a packaged product follows that same default, read from project.yml
         # unless CREST_DEFAULT_UPDATE_CHANNEL overrides it.
         info["CrestDefaultUpdateChannel"] = default_update_channel(repo)
-        if "SUFeedURL" not in info or "SUPublicEDKey" not in info:
+        if args.without_updates:
+            for key in [key for key in info if key.startswith("SU")]:
+                del info[key]
+            info["CrestSoftwareUpdatesDisabled"] = True
+        elif "SUFeedURL" not in info or "SUPublicEDKey" not in info:
             parser.error("Crest's Info.plist must supply the Sparkle feed and public key for a product package")
     else:
         # This experiment must not register as the system HTTP/HTTPS handler.

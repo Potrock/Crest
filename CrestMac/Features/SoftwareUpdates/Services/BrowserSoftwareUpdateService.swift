@@ -11,6 +11,15 @@ final class BrowserSoftwareUpdateService {
     static let bundledChannelPreferenceKey =
         "crest.software-update.bundled-channel"
     static let defaultChannelInfoKey = "CrestDefaultUpdateChannel"
+    /// Set in a build packaged without the update feed, such as a fork that
+    /// the person rebuilds themselves, so it never replaces itself with a
+    /// published Crest.
+    static let disabledInfoKey = "CrestSoftwareUpdatesDisabled"
+
+    /// Whether this build of Crest was packaged to take no updates.
+    static var isDisabledByBundle: Bool {
+        Bundle.main.object(forInfoDictionaryKey: disabledInfoKey) as? Bool == true
+    }
 
     // MARK: - Variables
 
