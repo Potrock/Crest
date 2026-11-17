@@ -62,6 +62,17 @@ When an agent runs in a [Rex](https://www.superlogical.com/rex/) terminal, each 
 - Press `o` to see the tab in Crest, or `q` to close the Rex tab. Closing a Rex tab leaves the Crest tab as it is, and that tab doesn't get a Rex tab again until the agent reconnects.
 - When the agent closes the Crest tab, its Rex tab closes too. When the agent disconnects, its Rex tabs stay open until you close them.
 
+## Let agents work in fewer steps
+
+The helper also offers `execute`, which runs a short JavaScript script that calls Crest's tools one after another and answers only what the script returns. An agent can then open a page, read it and act on it in one step, rather than one step per tool, which uses less of its context. Add `--compact` to the helper so the agent sees only `execute`, which reaches every tool:
+
+```text
+/Applications/Crest.app/Contents/Helpers/crest-browser mcp --rex --compact
+```
+
+- A script reaches nothing but Crest's tools: it has no network, files or timers. Each tool it calls is checked as if the agent called it, and shows in the agent's Rex tabs.
+- A script stops after a minute unless the agent asks for longer, up to five minutes, and makes at most 500 tool calls.
+
 ## For agent authors
 
 Crest includes a Model Context Protocol server as a helper inside the app, which an agent runs over its standard input and output:

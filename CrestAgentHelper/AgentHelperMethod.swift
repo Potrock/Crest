@@ -18,7 +18,7 @@ struct AgentHelperMethod: Sendable {
     }
     static let listTools = Self(name: "tools/list") { endpoint, _, id, modern in
         endpoint.send(
-            result: .object(["tools": endpoint.announcedTools ?? AgentToolDefinition.catalog]), id: id, modern: modern)
+            result: .object(["tools": endpoint.toolListing]), id: id, modern: modern)
     }
     static let callTool = Self(name: "tools/call") { endpoint, params, id, modern in
         endpoint.call(params, id: id, modern: modern)

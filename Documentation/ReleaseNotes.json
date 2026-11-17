@@ -5749,6 +5749,10 @@
     "rex-tab-page-after-load": {
       "category": "fixed",
       "message": "An agent's Rex tab shows the page a tab lands on after it loads, rather than the address it was leaving."
+    },
+    "agent-scripts-execute": {
+      "category": "new",
+      "message": "Coding agents can run one short script that uses several Crest tools in a row, so they open, read and act on pages in fewer steps, and a compact mode shows them only that."
     }
   }
 }

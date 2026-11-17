@@ -3,7 +3,7 @@ import Foundation
 
 // crest-browser, the helper agents run to use Crest:
 //
-//   crest-browser mcp [--rex]
+//   crest-browser mcp [--rex] [--compact]
 //
 // speaks the Model Context Protocol over its standard streams and reaches the
 // Crest app it ships inside, which must be running with agents turned on.
@@ -12,9 +12,14 @@ import Foundation
 //
 //   crest-browser rex-tab --hub SOCKET --tab ID
 //
-// to show that tab and what the agent does there.
+// to show that tab and what the agent does there. Its execute tool runs the
+// agent's scripts in
+//
+//   crest-browser script-worker
+//
+// and --compact lists execute alone, which reaches every tool.
 
-let usage = "usage: crest-browser mcp [--rex]\n"
+let usage = "usage: crest-browser mcp [--rex] [--compact]\n"
 let arguments = Array(CommandLine.arguments.dropFirst())
 
 /// The value after `option`, as `--option value`.
@@ -45,12 +50,16 @@ case "mcp":
     let rexTabs =
         arguments.contains("--rex")
         ? AgentRexTabs.opened(environment: ProcessInfo.processInfo.environment, helper: helper, link: link) : nil
-    let endpoint = AgentHelperEndpoint(output: streams, link: link, rexTabs: rexTabs, version: version)
+    let endpoint = AgentHelperEndpoint(
+        output: streams, link: link, rexTabs: rexTabs, helper: helper, isCompact: arguments.contains("--compact"),
+        version: version)
     for await line in streams.lines() {
         await endpoint.receive(line)
     }
     await rexTabs?.finish()
     exit(0)
+case "script-worker":
+    exit(AgentScriptWorker.run())
 case "rex-tab":
     guard let hub = value(of: "--hub"), let tab = value(of: "--tab").flatMap(UUID.init(uuidString:)),
         let descriptor = AgentAppLink.connect(hub)

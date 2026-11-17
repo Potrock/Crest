@@ -48,6 +48,10 @@ actor AgentHelperEndpoint {
     /// The Rex tabs of the Crest tabs the agent uses, when it runs in Rex and
     /// the person asked for them.
     private let rexTabs: AgentRexTabs?
+    /// The helper on disk, whose script worker runs `execute`.
+    private let helper: URL?
+    /// Whether the agent sees only `execute`, which reaches every tool.
+    private let isCompact: Bool
     private let serverInfo: AgentJSON
     /// The legacy revision `initialize` agreed on, which holds for the
     /// helper's life; nil for a modern client.
@@ -62,10 +66,15 @@ actor AgentHelperEndpoint {
 
     // MARK: - Initializers
 
-    init(output: AgentLineChannel, link: AgentAppLink, rexTabs: AgentRexTabs?, version: String) {
+    init(
+        output: AgentLineChannel, link: AgentAppLink, rexTabs: AgentRexTabs?, helper: URL?, isCompact: Bool,
+        version: String
+    ) {
         self.output = output
         self.link = link
         self.rexTabs = rexTabs
+        self.helper = helper
+        self.isCompact = isCompact
         serverInfo = .object(["name": .string("crest-browser"), "title": .string("Crest"), "version": .string(version)])
     }
 
@@ -112,7 +121,7 @@ actor AgentHelperEndpoint {
             result: .object([
                 "protocolVersion": .string(version.name),
                 "capabilities": .object(["tools": .object(["listChanged": .bool(true)])]),
-                "serverInfo": serverInfo, "instructions": .string(AgentToolDefinition.instructions),
+                "serverInfo": serverInfo, "instructions": .string(instructions),
             ]), id: id, modern: false)
     }
 
@@ -120,9 +129,26 @@ actor AgentHelperEndpoint {
         .object([
             "supportedVersions": .array(MCPProtocolVersion.all.map { .string($0.name) }),
             "capabilities": .object(["tools": .object([:])]),
-            "instructions": .string(AgentToolDefinition.instructions), "ttlMs": .number(Self.listLifetime),
+            "instructions": .string(instructions), "ttlMs": .number(Self.listLifetime),
             "cacheScope": .string("private"),
         ])
+    }
+
+    /// What Crest tells the agent about itself, and about `execute`.
+    private var instructions: String {
+        AgentToolDefinition.instructions
+            + (isCompact
+                ? " Every tool is reached through execute: write one script that calls them in order and returns only what you need."
+                : " For work that takes more than one tool call, prefer execute: one script that calls them in order and returns only what you need.")
+    }
+
+    /// The tools the agent sees: Crest's and `execute`, or `execute` alone.
+    var toolListing: AgentJSON {
+        let execute = AgentToolDefinition.execute.listing
+        guard !isCompact, case .array(let tools) = announcedTools ?? AgentToolDefinition.catalog else {
+            return .array([execute])
+        }
+        return .array(tools + [execute])
     }
 
     // MARK: - Actions - Tools
@@ -136,20 +162,43 @@ actor AgentHelperEndpoint {
         let client = client
         let key = Self.key(id)
         let rexTabs = rexTabs
+        let link = link
+        let helper = helper
         calls[key] = Task {
-            let rexCall = await rexTabs?.began(name, arguments: arguments, client: client)
-            let result: AgentToolResult
-            do {
-                result = try await link.call(name, arguments: arguments, client: client)
-            } catch let failure as AgentAppLink.Failure {
-                result = .error(failure.message)
-            } catch {
-                result = .error("Crest could not run the tool.")
+            let perform: @Sendable (String, AgentJSON) async -> AgentToolResult = { name, arguments in
+                await Self.perform(name, arguments: arguments, link: link, rexTabs: rexTabs, client: client)
             }
-            if let rexCall { await rexTabs?.ended(rexCall, result: result) }
+            let result: AgentToolResult
+            if name == AgentToolDefinition.execute.name {
+                result =
+                    if let helper {
+                        await AgentScriptRun(helper: helper, perform: perform).result(for: arguments)
+                    } else {
+                        .error("Crest's script worker can't be found.")
+                    }
+            } else {
+                result = await perform(name, arguments)
+            }
             guard !Task.isCancelled else { return }
             await finish(key, result: result, id: id, modern: modern)
         }
+    }
+
+    /// Calls Crest's tool `name` for the agent `client`, as its Rex tabs see.
+    private static func perform(
+        _ name: String, arguments: AgentJSON, link: AgentAppLink, rexTabs: AgentRexTabs?, client: AgentClientInfo?
+    ) async -> AgentToolResult {
+        let rexCall = await rexTabs?.began(name, arguments: arguments, client: client)
+        let result: AgentToolResult
+        do {
+            result = try await link.call(name, arguments: arguments, client: client)
+        } catch let failure as AgentAppLink.Failure {
+            result = .error(failure.message)
+        } catch {
+            result = .error("Crest could not run the tool.")
+        }
+        if let rexCall { await rexTabs?.ended(rexCall, result: result) }
+        return result
     }
 
     /// Stops the call the agent gave up on, as `params` names it.
