@@ -5745,6 +5745,10 @@
     "passwords-from-username-field": {
       "category": "improved",
       "message": "Saved passwords now appear when you click a sign-in form's username or email field, including on sites that ask for your account before your password."
+    },
+    "rex-tab-page-after-load": {
+      "category": "fixed",
+      "message": "An agent's Rex tab shows the page a tab lands on after it loads, rather than the address it was leaving."
     }
   }
 }

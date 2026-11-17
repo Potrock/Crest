@@ -14,6 +14,10 @@ actor AgentRexTabs {
     private struct Watched {
         var title = ""
         var url: String?
+        /// The Space the tab is in, once Crest said.
+        var space: UUID?
+        /// Counts the page's refreshes, so only the latest one goes on.
+        var refresh = 0
         var activities: [AgentRexActivity] = []
         /// The Rex window showing the tab, once Rex made it.
         var window: String?
@@ -43,9 +47,15 @@ actor AgentRexTabs {
             let id: UUID
             let title: String
             let url: String?
+            let space: UUID?
         }
 
         let tab: Tab?
+    }
+
+    /// What `list_tabs` answers.
+    private struct TabList: Decodable {
+        let tabs: [TabAnswer.Tab]
     }
 
     /// What `rex window new --json` answers.
@@ -76,6 +86,14 @@ actor AgentRexTabs {
     private static let measuredArguments = ["value", "text", "function"]
     /// The most calls a Rex tab keeps for a tab.
     private static let history = 200
+    /// Calls that can take a tab to another page. Crest answers them before
+    /// the page loads, so the tab's page is read again while it does.
+    private static let pageChanges: Set<String> = [
+        AgentToolDefinition.openTab.name, AgentToolDefinition.navigate.name, AgentToolDefinition.click.name,
+        AgentToolDefinition.pressKey.name,
+    ]
+    /// How long after such a call each read waits for the one before.
+    private static let refreshDelays: [Duration] = [.seconds(1), .seconds(3), .seconds(8)]
 
     // MARK: - Variables
 
@@ -166,7 +184,11 @@ actor AgentRexTabs {
             tabs[id] = Watched()
         }
         record(finished.activity, in: id)
-        if let answer, answer.id == id { retitle(id, title: answer.title, url: answer.url) }
+        if let answer, answer.id == id {
+            if let space = answer.space { tabs[id]?.space = space }
+            retitle(id, title: answer.title, url: answer.url)
+        }
+        if !result.isError, Self.pageChanges.contains(finished.activity.tool) { refreshPage(id) }
         if finished.activity.tool == AgentToolDefinition.closeTab.name, !result.isError {
             send(.closed, to: id)
             tabs[id]?.isDismissed = true
@@ -221,6 +243,27 @@ actor AgentRexTabs {
         Task {
             let created = await run(arguments).flatMap { try? JSONDecoder().decode(CreatedWindow.self, from: $0) }
             opened(id, window: created?.window)
+        }
+    }
+
+    /// Reads the tab's page from Crest again while it loads, so its Rex tab
+    /// shows where it landed rather than where it was.
+    private func refreshPage(_ id: UUID) {
+        guard let space = tabs[id]?.space else { return }
+        tabs[id]?.refresh += 1
+        let generation = tabs[id]?.refresh
+        let arguments = AgentJSON.object(["space": .string(space.uuidString)])
+        Task {
+            for delay in Self.refreshDelays {
+                try? await Task.sleep(for: delay)
+                guard tabs[id]?.refresh == generation, tabs[id]?.isDismissed == false else { return }
+                guard
+                    let result = try? await link.call(
+                        AgentToolDefinition.listTabs.name, arguments: arguments, client: client),
+                    let listed = Self.decoded(TabList.self, in: result)?.tabs.first(where: { $0.id == id })
+                else { continue }
+                retitle(id, title: listed.title, url: listed.url)
+            }
         }
     }
 
@@ -316,15 +359,19 @@ actor AgentRexTabs {
         return parts.isEmpty ? nil : parts.joined(separator: " ").withoutControlCharacters
     }
 
-    /// The tab a tab tool answered with: its JSON, after any note Crest put
-    /// before it.
+    /// The tab a tab tool answered with.
     private static func tab(in result: AgentToolResult) -> TabAnswer.Tab? {
+        decoded(TabAnswer.self, in: result)?.tab
+    }
+
+    /// A tool's answer as `type`: its JSON, after any note Crest put before it.
+    private static func decoded<Answer: Decodable>(_ type: Answer.Type, in result: AgentToolResult) -> Answer? {
         guard !result.isError, let text = result.content.compactMap(\.text).first else { return nil }
         let json =
             text.hasPrefix("{")
             ? Substring(text) : text.range(of: "\n{").map { text[text.index(before: $0.upperBound)...] }
         guard let json else { return nil }
-        return (try? JSONDecoder().decode(TabAnswer.self, from: Data(json.utf8)))?.tab
+        return try? JSONDecoder().decode(type, from: Data(json.utf8))
     }
 
     private static func executable(_ name: String, path: String?) -> URL? {
