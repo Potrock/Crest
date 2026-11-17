@@ -308,10 +308,7 @@ enum BrowserCredentialContentBridge {
           // Raising the prompt, and starting to follow the field it points at.
           // The listener and the testing hook go through here together so the
           // hook cannot drift away from the path a real focus takes.
-          const reportFocus = (input) => {
-            const root = rootFor(input);
-            const fields = snapshot(root, input);
-            if (!fields) return false;
+          const raisePrompt = (input, fields, fromUsernameField) => {
             const rect = rectOf(input);
             trackedField = rect ? { input: new WeakRef(input), formID: fields.formID } : null;
             trackedFieldRect = rect;
@@ -321,9 +318,36 @@ enum BrowserCredentialContentBridge {
               formID: fields.formID,
               username: fields.username || undefined,
               passwordKind: fields.passwordKind,
-              fieldRect: rect || undefined
+              fieldRect: rect || undefined,
+              fromUsernameField: fromUsernameField || undefined
             });
             return true;
+          };
+
+          const reportFocus = (input) => {
+            const fields = snapshot(rootFor(input), input);
+            return fields ? raisePrompt(input, fields, false) : false;
+          };
+
+          // A field that names the account: the username of a sign-in form,
+          // or, on a page that asks for the account before the password, a
+          // field marked as a username or an email address. The prompt it
+          // raises shows only when the Space keeps a password for the site.
+          const isAccountField = (input) => {
+            const tokens = input.autocomplete.toLowerCase().split(/\s+/);
+            return tokens.includes("username") || tokens.includes("email") || input.type === "email";
+          };
+
+          const reportUsernameFocus = (input) => {
+            if (input.type === "password" || !isVisible(input)) return false;
+            const root = rootFor(input);
+            const selection = passwordSelection(root);
+            if (selection) {
+              if (selection.kind !== "current" || usernameInputIn(root, selection.input) !== input) return false;
+            } else if (passwordInputsIn(root).length || !isAccountField(input)) {
+              return false;
+            }
+            return raisePrompt(input, { formID: idFor(root), username: "", passwordKind: "current" }, true);
           };
 
           const setInputValue = (input, value) => {
@@ -341,7 +365,18 @@ enum BrowserCredentialContentBridge {
                 return false;
               }
               const passwordInput = passwordInputsIn(root).find((input) => passwordKind(input) === "current");
-              if (!passwordInput) return false;
+              if (!passwordInput) {
+                // A page that asks for the account first takes just that.
+                if (passwordInputsIn(root).length) return false;
+                const focused = trackedField?.input.deref();
+                const accountInput = focused && root.contains(focused) && isAccountField(focused)
+                  ? focused
+                  : inputsIn(root).filter(isVisible).find(isAccountField);
+                if (!accountInput) return false;
+                setInputValue(accountInput, username);
+                accountInput.focus();
+                return true;
+              }
               const usernameInput = usernameInputIn(root, passwordInput);
               if (usernameInput) setInputValue(usernameInput, username);
               setInputValue(passwordInput, password);
@@ -366,9 +401,14 @@ enum BrowserCredentialContentBridge {
           });
 
           document.addEventListener("focusin", (event) => {
+            if (!event.isTrusted) return;
             const input = passwordInputFromEvent(event);
-            if (!event.isTrusted || !input) return;
-            reportFocus(input);
+            if (input) {
+              reportFocus(input);
+              return;
+            }
+            const target = elementFromEvent(event);
+            if (target instanceof HTMLInputElement) reportUsernameFocus(target);
           }, true);
 
           // The prompt is anchored under the focused field, so it stops

@@ -48,6 +48,10 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
     /// still deserves a prompt, just not an anchored one.
     let fieldRect: BrowserCredentialFieldRect?
 
+    /// Whether a focus came from the field naming the account rather than the
+    /// password, whose prompt shows only when the Space keeps one for the site.
+    let isFromUsernameField: Bool
+
     var description: String {
         "BrowserCredentialFormMessage(event: \(event.name), formID: \(formID ?? "none"), username: \(username ?? "none"), password: <redacted>)"
     }
@@ -64,6 +68,7 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
         case trusted
         case hasVisiblePasswordField
         case fieldRect
+        case fromUsernameField
     }
 
     // MARK: - Initializers
@@ -114,6 +119,7 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
         isTrustedUserEvent = fields.isTrustedUserEvent
         hasVisiblePasswordField = fields.hasVisiblePasswordField
         fieldRect = fields.fieldRect
+        isFromUsernameField = (try? container.decodeIfPresent(Bool.self, forKey: .fromUsernameField)) ?? false
     }
 
     // MARK: - Actions - Decoding

@@ -17,28 +17,40 @@ struct BrowserCredentialSuggestionPrompt: View {
     @State private var fillErrorMessage: String?
 
     var body: some View {
-        BrowserCredentialPromptSurface(
-            accessibilityLabel: Text("Crest password suggestions"),
-            accessibilityIdentifier: "crest-password-suggestions",
-            width: metrics.fillPromptWidth,
-            metrics: metrics
-        ) {
-            BrowserCredentialSuggestionPromptContent(
-                request: request,
-                space: space,
-                siteIconData: port.siteIconData,
-                model: model,
-                fillErrorMessage: fillErrorMessage,
-                metrics: metrics,
-                dismiss: port.dismiss,
-                fill: fill
-            )
+        Group {
+            if isShown {
+                BrowserCredentialPromptSurface(
+                    accessibilityLabel: Text("Crest password suggestions"),
+                    accessibilityIdentifier: "crest-password-suggestions",
+                    width: metrics.fillPromptWidth,
+                    metrics: metrics
+                ) {
+                    BrowserCredentialSuggestionPromptContent(
+                        request: request,
+                        space: space,
+                        siteIconData: port.siteIconData,
+                        model: model,
+                        fillErrorMessage: fillErrorMessage,
+                        metrics: metrics,
+                        dismiss: port.dismiss,
+                        fill: fill
+                    )
+                }
+            } else {
+                Color.clear.frame(width: 0, height: 0)
+            }
         }
         .task(id: request.id) {
             fillErrorMessage = nil
             await model.load(request, in: port.spaceID, using: browser)
         }
         .onDisappear(perform: model.cancel)
+    }
+
+    /// A prompt that shows only with suggestions stays out of the way while
+    /// the vault answers, and when it has nothing for the site.
+    private var isShown: Bool {
+        !request.showsOnlyWithSuggestions || !model.suggestions.isEmpty
     }
 
     private var space: BrowserSpaceIdentity? {

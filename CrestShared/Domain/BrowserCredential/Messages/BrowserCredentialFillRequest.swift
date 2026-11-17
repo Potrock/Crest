@@ -18,6 +18,10 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
     /// placement it has always had rather than pointing at the wrong place.
     let fieldRect: BrowserCredentialFieldRect?
 
+    /// Whether the prompt stays hidden until the Space has a password to
+    /// offer, as for a username field, which also takes other text.
+    let showsOnlyWithSuggestions: Bool
+
     init(
         id: UUID,
         origin: CredentialOrigin,
@@ -26,7 +30,8 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
         passwordKind: CredentialPasswordKind,
         isCrossOriginFrame: Bool,
         requestedAt: Date,
-        fieldRect: BrowserCredentialFieldRect? = nil
+        fieldRect: BrowserCredentialFieldRect? = nil,
+        showsOnlyWithSuggestions: Bool = false
     ) {
         self.id = id
         self.origin = origin
@@ -36,6 +41,7 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
         self.isCrossOriginFrame = isCrossOriginFrame
         self.requestedAt = requestedAt
         self.fieldRect = fieldRect
+        self.showsOnlyWithSuggestions = showsOnlyWithSuggestions
     }
 
     /// The same request, following its field to where the page just moved it.
@@ -52,7 +58,8 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
             passwordKind: passwordKind,
             isCrossOriginFrame: isCrossOriginFrame,
             requestedAt: requestedAt,
-            fieldRect: fieldRect
+            fieldRect: fieldRect,
+            showsOnlyWithSuggestions: showsOnlyWithSuggestions
         )
     }
 }

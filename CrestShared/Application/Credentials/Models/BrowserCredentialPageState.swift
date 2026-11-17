@@ -301,7 +301,8 @@ extension BrowserCredentialPageState: CredentialCapturePerformer {
             passwordKind: passwordKind,
             isCrossOriginFrame: decision.isCrossOriginFrame,
             requestedAt: observation.now,
-            fieldRect: decision.anchorsToField ? message.fieldRect : nil
+            fieldRect: decision.anchorsToField ? message.fieldRect : nil,
+            showsOnlyWithSuggestions: message.isFromUsernameField
         )
         if let previousRequest = fillRequest {
             fillTargets[previousRequest.id] = nil
