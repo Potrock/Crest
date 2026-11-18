@@ -5753,6 +5753,10 @@
     "agent-scripts-execute": {
       "category": "new",
       "message": "Coding agents can run one short script that uses several Crest tools in a row, so they open, read and act on pages in fewer steps, and a compact mode shows them only that."
+    },
+    "smoother-sidebar-hover-and-scroll": {
+      "category": "improved",
+      "message": "Moving the pointer over the sidebar and scrolling through tabs is smoother, and the window does less work for every pointer movement."
     }
   }
 }

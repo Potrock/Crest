@@ -41,7 +41,7 @@ struct BrowserSidebarTabRowSurface: ViewModifier {
             .modifier(
                 BrowserSidebarTabRowAppearance(
                     configuration: configuration,
-                    isHovering: interaction.isHovering
+                    hover: interaction.hover
                 )
             )
             .padding(
@@ -72,7 +72,7 @@ struct BrowserSidebarTabRowSurface: ViewModifier {
                     isEnabled: configuration.isAvailableForDisplay && !interaction.isRenaming)
             )
             .contentShape(.rect)
-            .onHover { interaction.isHovering.wrappedValue = $0 }
+            .onHover { interaction.hover.set($0) }
             .modifier(
                 BrowserPlatformRowAuxiliaryClickModifier(
                     perform: interaction.dismissFromAuxiliaryClick
@@ -168,7 +168,7 @@ struct BrowserSidebarTabRowSurface: ViewModifier {
 /// Hover updates the row's appearance without rebuilding its input modifiers.
 private struct BrowserSidebarTabRowAppearance: ViewModifier {
     let configuration: BrowserSidebarTabRowConfiguration
-    @Binding var isHovering: Bool
+    let hover: BrowserSidebarRowHover
     @Environment(\.sidebarLayerDepth) private var depth
 
     func body(content: Content) -> some View {
@@ -189,7 +189,7 @@ private struct BrowserSidebarTabRowAppearance: ViewModifier {
                     accent: accent,
                     isPinned: false,
                     isSelected: configuration.isSelected,
-                    isHovering: isHovering
+                    isHovering: hover.isHovering
                         || (!configuration.isSplitGroupMember
                             && BrowserSidebarSelection.showsSelected(
                                 .tab(configuration.tab.id), in: configuration.context))

@@ -17,7 +17,7 @@ struct BrowserSidebarTabRow: View {
     var isSplitGroupMember = false
 
     @Environment(\.sidebarSpacePresentation) private var spacePresentation
-    @State private var isHovering = false
+    @State private var hover = BrowserSidebarRowHover()
     @State private var renameRequest: BrowserTabRuntimeAssignment?
     @State private var iconRequest: BrowserTabRuntimeAssignment?
     @State private var draftTitle = ""
@@ -36,7 +36,7 @@ struct BrowserSidebarTabRow: View {
                 interaction: interaction
             )
         )
-        .browserTabPreviewSource(.tab(tab), in: context)
+        .browserTabPreviewSource(.tab(tab), in: context, trackedHover: hover)
         .modifier(
             BrowserTabStatusBadgeHost(
                 tab: BrowserTabStatusSource(
@@ -82,7 +82,7 @@ struct BrowserSidebarTabRow: View {
 
     private var interaction: BrowserSidebarTabRowInteractionContext {
         BrowserSidebarTabRowInteractionContext(
-            isHovering: $isHovering,
+            hover: hover,
             isRenaming: isRenaming,
             draftTitle: $draftTitle,
             isTitleFocused: $isTitleFocused,

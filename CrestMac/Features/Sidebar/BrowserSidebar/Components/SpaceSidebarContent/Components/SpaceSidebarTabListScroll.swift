@@ -32,6 +32,20 @@ struct SpaceSidebarTabListScroll<Background: View, Content: View>: View {
     @State private var scrollRegionID = UUID()
     @State private var viewport = BrowserSidebarScrollViewport()
     @State private var visibleBand = BrowserSidebarVisibleBand()
+    /// Whether the list is moving under the pointer, from a gesture or its
+    /// momentum.
+    @State private var isScrolling = false
+
+    /// Whether the rows answer the pointer. While the list scrolls, rows pass
+    /// under a still pointer and SwiftUI would hit-test every row on every
+    /// frame to move the hover from one to the next, each move restyling two
+    /// rows and reporting to the tab preview. As in other Mac lists, hover
+    /// waits for the list to stop, and the row under the pointer lights up
+    /// then. A drag keeps its rows live, since it scrolls the list itself.
+    private var rowsTakePointer: Bool {
+        !isScrolling || sidebarInteraction.sidebarReorderState.hasLiftInFlight
+            || sidebarInteraction.tabDragState.item != nil
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -48,6 +62,7 @@ struct SpaceSidebarTabListScroll<Background: View, Content: View>: View {
                 }
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: geometry.size.height, alignment: .top)
+                .allowsHitTesting(rowsTakePointer)
                 .coordinateSpace(BrowserSidebarVisibleBand.contentSpace)
                 .environment(\.browserSidebarVisibleBand, visibleBand)
                 .background {
@@ -65,6 +80,9 @@ struct SpaceSidebarTabListScroll<Background: View, Content: View>: View {
                 $0.visibleRect
             } action: { _, rect in
                 visibleBand.follow(rect)
+            }
+            .onScrollPhaseChange { _, phase in
+                if isScrolling != phase.isScrolling { isScrolling = phase.isScrolling }
             }
             .onChange(of: sidebarInteraction.sidebarReorderState.hasLiftInFlight, initial: true) { _, isLifting in
                 visibleBand.hold(isLifting)

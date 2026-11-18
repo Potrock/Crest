@@ -13,6 +13,10 @@ struct BrowserTabPreviewSource: ViewModifier {
 
     let subject: BrowserTabPreviewSubject
     let context: BrowserSidebarListContext?
+    /// The pointer's hover as the view this modifies already tracks it, so
+    /// the row isn't hit-tested for hover twice on each mouse move. Nil when
+    /// the view tracks none, and this tracks its own.
+    var trackedHover: BrowserSidebarRowHover?
 
     @Environment(BrowserSidebarInteractionState.self) private var sidebarInteraction: BrowserSidebarInteractionState?
     @Environment(\.browserTabPreviewState) private var previewOverride
@@ -31,7 +35,7 @@ struct BrowserTabPreviewSource: ViewModifier {
         guard let preview, preview.isHosted, preview.isSidebarShown, let context, context.capabilities.supportsHover,
             subject.isTurnedOn, !isDragging
         else { return false }
-        return isPointerOver || isKeyboardFocused(in: context)
+        return (trackedHover?.isHovering ?? isPointerOver) || isKeyboardFocused(in: context)
     }
 
     private var isDragging: Bool {
@@ -48,7 +52,7 @@ struct BrowserTabPreviewSource: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onHover { isPointerOver = $0 }
+            .modifier(OwnHover(isTracked: trackedHover != nil, isPointerOver: $isPointerOver))
             .background {
                 if isRested {
                     GeometryReader { proxy in
@@ -102,6 +106,21 @@ struct BrowserTabPreviewSource: ViewModifier {
     }
 }
 
+/// The preview's own hover region, for a view that tracks no hover of its
+/// own. Whether the view tracks one never changes for a given call site.
+private struct OwnHover: ViewModifier {
+    let isTracked: Bool
+    @Binding var isPointerOver: Bool
+
+    func body(content: Content) -> some View {
+        if isTracked {
+            content
+        } else {
+            content.onHover { isPointerOver = $0 }
+        }
+    }
+}
+
 extension EnvironmentValues {
     /// The preview the rows under this view report to in place of their
     /// window's, as a folder card's rows report to that card's own.
@@ -111,9 +130,10 @@ extension EnvironmentValues {
 extension View {
     /// Reports this row or tile of `subject` to the window's tab preview.
     func browserTabPreviewSource(
-        _ subject: BrowserTabPreviewSubject, in context: BrowserSidebarListContext?
+        _ subject: BrowserTabPreviewSubject, in context: BrowserSidebarListContext?,
+        trackedHover: BrowserSidebarRowHover? = nil
     ) -> some View {
-        modifier(BrowserTabPreviewSource(subject: subject, context: context))
+        modifier(BrowserTabPreviewSource(subject: subject, context: context, trackedHover: trackedHover))
     }
 
     /// Gives VoiceOver what a preview card adds about `tab`: its site, and

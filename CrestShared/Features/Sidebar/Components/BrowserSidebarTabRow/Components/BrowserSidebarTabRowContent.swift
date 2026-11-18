@@ -13,7 +13,7 @@ struct BrowserSidebarTabRowContent: View {
             leadingContent
             BrowserSidebarTabTrailingControl(
                 configuration: configuration,
-                isHovering: interaction.isHovering
+                hover: interaction.hover
             )
             .padding(.trailing, configuration.metrics.contentTrailingInset)
         }

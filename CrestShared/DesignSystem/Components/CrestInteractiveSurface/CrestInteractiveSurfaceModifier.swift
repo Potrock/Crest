@@ -39,6 +39,11 @@ struct CrestInteractiveSurfaceModifier: ViewModifier {
             .background {
                 surface(in: shape)
                     .overlay { if selectionEmphasis { shape.fill(CrestColor.hover) } }
+                    // Hover eases only the surface. Eased over the content,
+                    // each row the pointer crossed animated its title, icon
+                    // and controls through every frame of the fade, which is
+                    // what made moving over a list redraw it continuously.
+                    .animation(accessibleSurfaceAnimation, value: isHovering)
             }
             .overlay {
                 shape
@@ -57,7 +62,6 @@ struct CrestInteractiveSurfaceModifier: ViewModifier {
                     ? CrestInteractiveSurfaceMetrics.selectedShadowYOffset
                     : 0
             )
-            .animation(accessibleSurfaceAnimation, value: isHovering)
             .animation(accessibleSurfaceAnimation, value: selectionEmphasis)
             // Selection shows at once, as browsers switch tabs; only a press
             // eases in. Fading a selected surface in and out redraws its

@@ -16,7 +16,7 @@ struct BrowserSidebarTabTrailingControl: View {
     // MARK: - Variables
 
     let configuration: BrowserSidebarTabRowConfiguration
-    @Binding var isHovering: Bool
+    let hover: BrowserSidebarRowHover
 
     @Environment(BrowserSidebarInteractionState.self) private var sidebarInteraction
 
@@ -45,7 +45,7 @@ struct BrowserSidebarTabTrailingControl: View {
 
     private var isRevealed: Bool {
         configuration.trailingControlMetrics.isRevealed(
-            isHovering: isHovering,
+            isHovering: hover.isHovering,
             isSelected: configuration.isSelected
         )
     }

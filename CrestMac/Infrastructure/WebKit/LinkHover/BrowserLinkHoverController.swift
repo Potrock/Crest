@@ -49,7 +49,10 @@ final class BrowserLinkHoverController {
             ]
         ) { [weak self] event in
             MainActor.assumeIsolated {
-                guard let self else { return }
+                // Every page that has shown a preview keeps this monitor, and
+                // `canPresent` hit-tests the whole window, so a page with
+                // nothing shown or pending stays out of each mouse move.
+                guard let self, !self.isIdle else { return }
                 if event.type != .mouseMoved || !self.canPresent {
                     self.invalidate()
                 }
@@ -215,6 +218,10 @@ final class BrowserLinkHoverController {
         )
         return result as? Bool == true
     }
+
+    /// Whether nothing is shown, pending or left to retire, so an event
+    /// has nothing to withdraw.
+    private var isIdle: Bool { work == nil && retireSource == nil && state.isIdle }
 
     private var canPresent: Bool {
         guard !isNavigating, let contentView, let presentationHost,
